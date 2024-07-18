@@ -8,10 +8,11 @@ originalweatherdf = pandas.read_csv(r'C:\Users\danie\Downloads\Loisaida Code\100
 originalweatherdf['sunrise'] = pandas.to_datetime(originalweatherdf['sunrise']) #cnvert to datetime format
 originalweatherdf['sunset'] = pandas.to_datetime(originalweatherdf['sunset'])
 originalweatherdf['day_length'] = originalweatherdf['sunset'] - originalweatherdf['sunrise'] #calc day length
-originalweatherdf = originalweatherdf.drop(columns=['name', 'datetime', 'description', 'stations', 'sunrise', 'sunset']) #remove columns
+originalweatherdf = originalweatherdf.drop(columns=['name', 'description', 'stations', 'sunrise', 'sunset']) #remove columns
 
 originalweatherdf['solarenergy'] = originalweatherdf['solarenergy'] * 227.78 #convert MJ/m^2 to wh/m^2
 originalweatherdf = originalweatherdf[originalweatherdf['solarenergy'] != 0] #remove all days w/ unmeasured solar energies(21)
+print(originalweatherdf)
 
 AVGLD = originalweatherdf['day_length'].mean()
 AVGSE = originalweatherdf['solarenergy'].mean()
@@ -33,16 +34,32 @@ for index, row in buildingdf.iterrows():
     building = Building(units, TheoSpace, UsagePproperty, numberofbatteries, storagePbattery)
     Buildings[address] = building
 
-#NYISO DATA
-loaddf = NYISOData(dataset='load_h', year='2019').df # year argument in local time, but returns dataset in UTC
-loaddf = loaddf[['N.Y.C.']]
 
-years = ['2023','2024']
-datasets = ['load_h']
-NYISOData.construct_databases(years=years, datasets=datasets)
-#If you need to work with data in local time, then convert time zone
-loaddf = loaddf.tz_convert('US/Eastern')
-print (loaddf)
+#NYISO DATA
+loaddf = NYISOData(dataset='load_h', year='2023').df # year argument in local time, but returns dataset in UTC
+otherloaddf =  NYISOData(dataset='load_h', year='2024').df # year argument in local time, but returns dataset in UTC
+loaddf = pandas.concat([loaddf, otherloaddf], ignore_index=False)
+loaddf = loaddf.loc[:, ['N.Y.C.']]
+loaddf = loaddf.reset_index()
+loaddf.columns = ['Time', 'N.Y.C.']
+
+#Match Weather Data to NYISO Data
+
+originalweatherdf['datetime'] = pandas.to_datetime(originalweatherdf['datetime']).dt.date
+loaddf['Time'] = pandas.to_datetime(loaddf['Time']).dt.date
+loaddf = loaddf[loaddf['Time'].isin(originalweatherdf['datetime'])]
+loaddf['N.Y.C.'] = loaddf['N.Y.C.'] * 1000000 #convert MW to W
+
+#set hourly and daily load df
+loadhourly = loaddf.copy()
+loaddaily = loaddf.copy()
+
+#Convert to daily structure
+loaddaily['Time'] = pandas.to_datetime(loaddaily['Time'])
+loaddaily['Time'] = loaddaily['Time'].dt.date
+loaddaily = loaddaily.groupby('Time')['N.Y.C.'].sum().reset_index()
+print(loaddaily)
+
 
 #Weather DF
 originalweatherdf['WeatherClass'] = Weather(originalweatherdf['day_length'], originalweatherdf['preciptype'], originalweatherdf['temp'])
@@ -100,6 +117,7 @@ print(iterations)
 print(f'Total Solar Energy Used: {SUsed} Wh')
 print(f'Total Grid Energy Used:  {GUsed} Wh')
 print(f'Total Energy Used:          {SUsed+GUsed} Wh')
+#print(f'Total load: {}')
 usageongrid = 0
 for x in Buildings:
   usageongrid += Buildings[x].units * Buildings[x].UsagePproperty
