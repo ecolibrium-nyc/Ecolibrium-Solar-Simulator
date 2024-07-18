@@ -24,3 +24,6 @@ class Weather:
     self.temp = temp
   def __str__(self):
     return "The Duration of the sun is " + str(self.SunDuration) + " with an average temp of " + str(self.temp) + " and " + str(self.Precipitation) + " Precipitation type!"
+
+#def calcsolarpday(solarenergy, solarpanel):
+  

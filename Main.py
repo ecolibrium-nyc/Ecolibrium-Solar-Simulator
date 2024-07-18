@@ -128,3 +128,5 @@ print(f'Expected Total Energy Used:    {expected_total_energy_used} Wh')
 TLoad = loaddaily['N.Y.C.'].sum()
 print(f'Total load in NYC befor solar: {TloadBefore} wh')
 print(f'Total load in NYC after Solar: {TLoad} wh')
+
+#incorporate solar panel characeristics based on formula on Daniel's phone
