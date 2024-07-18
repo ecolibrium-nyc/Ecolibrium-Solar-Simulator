@@ -59,6 +59,7 @@ loaddaily['Time'] = pandas.to_datetime(loaddaily['Time'])
 loaddaily['Time'] = loaddaily['Time'].dt.date
 loaddaily = loaddaily.groupby('Time')['N.Y.C.'].sum().reset_index()
 print(loaddaily)
+TloadBefore = loaddaily['N.Y.C.'].sum()
 
 
 #Weather DF
@@ -77,7 +78,6 @@ iterations=0
              'Address4': Building(1000, 2500, 10000, 2000, 5000)}"""
 BasePanel = SolarPanel(500, .2, 1, 1, 1)
 powerpsqm = originalweatherdf['solarenergy'] * BasePanel.Efficiency #calc total solar input per sq m
-
 for daily_solar in powerpsqm:
 
   for address in Buildings:
@@ -103,24 +103,28 @@ for daily_solar in powerpsqm:
               if Buildings[address].BatteryLevel * Buildings[address].storagePbattery * Buildings[address].numberofbatteries >= energy_needed:
                   Buildings[address].BatteryLevel -= energy_needed / (Buildings[address].storagePbattery * Buildings[address].numberofbatteries)
                   SUsed += energy_needed
+                  loaddaily.at[iterations, 'N.Y.C.'] -= energy_needed
                   energy_needed = 0
               else:
                   SUsed += Buildings[address].BatteryLevel * Buildings[address].storagePbattery * Buildings[address].numberofbatteries
+                  loaddaily.at[iterations, 'N.Y.C.'] -= Buildings[address].BatteryLevel * Buildings[address].storagePbattery * Buildings[address].numberofbatteries
                   energy_needed -= Buildings[address].BatteryLevel * Buildings[address].storagePbattery * Buildings[address].numberofbatteries
                   Buildings[address].BatteryLevel = 0
           GUsed += energy_needed
       else:
           SUsed += energy_needed
+          loaddaily.at[iterations, 'N.Y.C.'] -= energy_needed
   iterations +=1
 
 print(iterations)
-print(f'Total Solar Energy Used: {SUsed} Wh')
-print(f'Total Grid Energy Used:  {GUsed} Wh')
-print(f'Total Energy Used:          {SUsed+GUsed} Wh')
-#print(f'Total load: {}')
+print(f'Total Solar Energy Used:       {SUsed} Wh')
+print(f'Total Grid Energy Used:        {GUsed} Wh')
+print(f'Total Energy Used:             {SUsed+GUsed} Wh')
 usageongrid = 0
 for x in Buildings:
   usageongrid += Buildings[x].units * Buildings[x].UsagePproperty
 expected_total_energy_used = 344 * usageongrid  # 344 days * usage on whole grid per day
-print(f'Expected Total Energy Used: {expected_total_energy_used} Wh')
-
+print(f'Expected Total Energy Used:    {expected_total_energy_used} Wh')
+TLoad = loaddaily['N.Y.C.'].sum()
+print(f'Total load in NYC befor solar: {TloadBefore} wh')
+print(f'Total load in NYC after Solar: {TLoad} wh')
