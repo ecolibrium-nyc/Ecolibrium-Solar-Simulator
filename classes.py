@@ -1,9 +1,11 @@
+import random
 class SolarPanel:
-  def __init__(self, RatedPowerTotal,  Efficiency, Tolerance, TempCoefficient,RatedPPC = 0):
+  def __init__(self, RatedPowerTotal,  Efficiency, Tolerance, TempCoefficient,refrencetemp = 25, RatedPPC = 0):
     self.RatedPowerTotal = RatedPowerTotal
     self.RatedPPC = RatedPPC
     self.Efficiency = Efficiency
     self.Tolerance = Tolerance
+    self.refrencetemp = refrencetemp
     self.TempCoefficient = TempCoefficient
 
 class Building:
@@ -25,5 +27,8 @@ class Weather:
   def __str__(self):
     return "The Duration of the sun is " + str(self.SunDuration) + " with an average temp of " + str(self.temp) + " and " + str(self.Precipitation) + " Precipitation type!"
 
-#def calcsolarpday(solarenergy, solarpanel):
-  
+def calcsolarpday(solarenergy, solarpanel, weatherdf, iteration):
+  solarforday = solarenergy * solarpanel.Efficiency #takes into account efficiency
+  solarforday *= (1 + round(random.uniform(0, solarpanel.Tolerance), 5)) #takes into account tolerance rating on a random scale up to 5 decimal points
+  solarforday *= (1-solarpanel.TempCoefficient*(weatherdf.loc[iteration, 'temp'] - solarpanel.refrencetemp)) #take into account weather
+  return solarforday

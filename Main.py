@@ -2,6 +2,7 @@ import pandas
 import math
 from nyisotoolkit import NYISOData, NYISOStat, NYISOVis
 from classes import *
+import random
 
 #Weather Data
 originalweatherdf = pandas.read_csv(r'C:\Users\danie\Downloads\Loisaida Code\10002 2023-07-18 to 2024-07-16.csv') #read weather csv file
@@ -12,6 +13,7 @@ originalweatherdf = originalweatherdf.drop(columns=['name', 'description', 'stat
 
 originalweatherdf['solarenergy'] = originalweatherdf['solarenergy'] * 227.78 #convert MJ/m^2 to wh/m^2
 originalweatherdf = originalweatherdf[originalweatherdf['solarenergy'] != 0] #remove all days w/ unmeasured solar energies(21)
+originalweatherdf.reset_index(drop=True, inplace=True)
 print(originalweatherdf)
 
 AVGLD = originalweatherdf['day_length'].mean()
@@ -76,14 +78,14 @@ iterations=0
              'Address2': Building(50, 2500, 10000, 100, 5000),
              'Address3': Building(200, 2500, 10000, 400, 5000),
              'Address4': Building(1000, 2500, 10000, 2000, 5000)}"""
-BasePanel = SolarPanel(500, .2, 1, 1, 1)
-powerpsqm = originalweatherdf['solarenergy'] * BasePanel.Efficiency #calc total solar input per sq m
+BasePanel = SolarPanel(500, .21, .05, .003)
+powerpsqm = originalweatherdf['solarenergy']
 for daily_solar in powerpsqm:
-
+  energyproduced = calcsolarpday(daily_solar, BasePanel, originalweatherdf, iterations) #take into account solar panel efficiencies
   for address in Buildings:
       energy_stored = 0
       energy_needed = Buildings[address].units * Buildings[address].UsagePproperty
-      energy_obtained = Buildings[address].TheoSpace * daily_solar
+      energy_obtained = Buildings[address].TheoSpace * energyproduced
 
       # Prioritize battery storage
       if Buildings[address].BatteryLevel < 1:
