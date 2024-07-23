@@ -156,7 +156,7 @@ for index, row in hourly_data_df.iterrows():
   energyproduced = calcsolarpperiod(hourly_solar, BasePanel, originalweatherdf, date) #take into account solar panel efficiencies
   for address in Buildings:
       energy_stored = 0
-      energy_needed = (Buildings[address].units * Buildings[address].UsagePproperty)/24
+      energy_needed = (get_hourly_usage(date.hour,Buildings[address].units * Buildings[address].UsagePproperty))
       energy_obtained = Buildings[address].TheoSpace * energyproduced
 
       # Prioritize battery storage
