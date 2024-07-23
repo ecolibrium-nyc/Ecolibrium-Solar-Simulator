@@ -27,8 +27,8 @@ class Weather:
   def __str__(self):
     return "The Duration of the sun is " + str(self.SunDuration) + " with an average temp of " + str(self.temp) + " and " + str(self.Precipitation) + " Precipitation type!"
 
-def calcsolarpday(solarenergy, solarpanel, weatherdf, iteration):
+def calcsolarpperiod(solarenergy, solarpanel, weatherdf, dates):
   solarforday = solarenergy * solarpanel.Efficiency #takes into account efficiency
   solarforday *= (1 + round(random.uniform(0, solarpanel.Tolerance), 5)) #takes into account tolerance rating on a random scale up to 5 decimal points
-  solarforday *= (1-solarpanel.TempCoefficient*(weatherdf.loc[iteration, 'temp'] - solarpanel.refrencetemp)) #take into account weather
+  solarforday *= (1-solarpanel.TempCoefficient*(weatherdf.loc[dates.strftime('%Y-%m-%d'), 'temp'] - solarpanel.refrencetemp)) #take into account weather
   return solarforday
