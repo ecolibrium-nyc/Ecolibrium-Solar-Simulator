@@ -99,6 +99,7 @@ def pricingmodelcalc(postsolarload):
   pricedf['Time'] = pricedf['Time'] - pd.Timedelta(hours=5)
 
   #configure given load df
+  postsolarload.reset_index(inplace=True)
   postsolarload['Time'] = pd.to_datetime(postsolarload['Time'])
   postsolarload['day_of_week'] = postsolarload['Time'].dt.dayofweek  # 0 = Monday, 6 = Sunday
   postsolarload['month'] = postsolarload['Time'].dt.month
@@ -134,14 +135,3 @@ def pricingmodelcalc(postsolarload):
   postsolarload['predicted_price'] = new_prices
   postsolarload = postsolarload.drop(columns=['day_of_week', 'month', 'hour'])
   return postsolarload
-
-
-
-solarloaddf = pd.read_csv(r'NewLoadpostsolar.csv')
-start_time = time.time()
-df = pricingmodelcalc(solarloaddf)
-
-end_time = time.time()
-duration = end_time - start_time
-print(f"Execution time: {duration} seconds")
-print('hi')

@@ -214,6 +214,12 @@ TLoad = loaddf['N.Y.C.'].sum()
 print(f'Total load in NYC befor solar: {TloadBefore} wh')
 print(f'Total load in NYC after Solar: {TLoad} wh')
 loaddf.to_csv(loadsavepath)
+
+#calculate new ISO price data assuming Solar load decreases
+solarloaddf = pd.read_csv(r'NewLoadpostsolar.csv')
+start_time = time.time()
+df = pricingmodelcalc(loaddf)
+
 end_time = time.time()
 duration = end_time - start_time
 print(f"Execution time: {duration} seconds")
