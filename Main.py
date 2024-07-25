@@ -126,8 +126,6 @@ def generate_hourly_data(date, total_energy, sunrise_hour, sunset_hour, hourly_d
         hourly_energy.append(energy)
     # Apply smoothing
     hourly_energy = smooth_data(np.array(hourly_energy))
-    # Adjust based on daylight hours and realistic solar pattern
-    daylight_mask = (np.arange(24) >= sunrise_hour) & (np.arange(24) <= sunset_hour)
     hours = np.arange(24)
     peak_hour = (sunrise_hour + sunset_hour) / 2
     solar_pattern = np.clip(np.cos((hours - peak_hour) * np.pi / (sunset_hour - sunrise_hour)), 0, None)
@@ -201,6 +199,11 @@ for index, row in hourly_data_df.iterrows():
           loaddf.at[date, 'N.Y.C.'] -= energy_needed
   iterations +=1
 
+#calculate new ISO price data assuming Solar load decreases
+loaddfcopy = loaddf.copy()
+NewLMBPprices = pricingmodelcalc(loaddfcopy)
+LBMPsavings = lbmpsavingscalc(NewLMBPprices)
+
 print(iterations)
 print(f'Total Solar Energy Used:       {SUsed} Wh')
 print(f'Total Grid Energy Used:        {GUsed} Wh')
@@ -213,12 +216,7 @@ print(f'Expected Total Energy Used:    {expected_total_energy_used} Wh')
 TLoad = loaddf['N.Y.C.'].sum()
 print(f'Total load in NYC befor solar: {TloadBefore} wh')
 print(f'Total load in NYC after Solar: {TLoad} wh')
-loaddf.to_csv(loadsavepath)
-
-#calculate new ISO price data assuming Solar load decreases
-solarloaddf = pd.read_csv(r'NewLoadpostsolar.csv')
-start_time = time.time()
-df = pricingmodelcalc(loaddf)
+print(f'Total LBMP price saved: ${LBMPsavings}')
 
 end_time = time.time()
 duration = end_time - start_time

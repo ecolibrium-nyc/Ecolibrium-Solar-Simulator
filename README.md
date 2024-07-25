@@ -11,3 +11,6 @@ Overarching Goals:
 2. Simulate electricity price using a regression model through past demand and price data from the NYISO. 
 3. Simulate charging and transmission capactities and their effect on the grid and price.
 4. Incorporate the increased resilience from the decreased loads, savings calculated from the regression model, and enviornmental impact into a cost-benefit analysis.
+
+
+PLANS: FIX LOAD BUG, MULTIPROCESS THE INNER FOR LOOP, FIX DICT PROBLEM

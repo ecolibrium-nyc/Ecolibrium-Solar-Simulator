@@ -75,16 +75,17 @@ def get_hourly_usage(hour, total_daily_usage):
 
 def pricingmodelcalc(postsolarload):
   #configure ISO DATA
-  loaddf = NYISOData(dataset='load_h', year='2023').df # year argument in local time, but returns dataset in UTC
-  otherloaddf =  NYISOData(dataset='load_h', year='2022').df # year argument in local time, but returns dataset in UTC
-  otherloaddff =  NYISOData(dataset='load_h', year='2021').df
-  otherloaddfff =  NYISOData(dataset='load_h', year='2020').df
-  otherloaddffff =  NYISOData(dataset='load_h', year='2019').df
-  loaddf = pd.concat([loaddf, otherloaddf, otherloaddff,  otherloaddfff, otherloaddffff], ignore_index=False)
-  loaddf = loaddf.loc[:, ['N.Y.C.']]
-  loaddf = loaddf.reset_index()
-  loaddf.columns = ['Time', 'N.Y.C.']
-  loaddf['Time'] = pd.to_datetime(loaddf['Time'])
+  lloaddf = NYISOData(dataset='load_h', year='2023').df # year argument in local time, but returns dataset in UTC
+  otherlloaddf =  NYISOData(dataset='load_h', year='2022').df # year argument in local time, but returns dataset in UTC
+  otherlloaddff =  NYISOData(dataset='load_h', year='2021').df
+  otherlloaddfff =  NYISOData(dataset='load_h', year='2020').df
+  otherlloaddffff =  NYISOData(dataset='load_h', year='2019').df
+  lloaddf = pd.concat([lloaddf, otherlloaddf, otherlloaddff,  otherlloaddfff, otherlloaddffff], ignore_index=False)
+  lloaddf = lloaddf.loc[:, ['N.Y.C.']]
+  lloaddf = lloaddf.reset_index()
+  lloaddf.columns = ['Time', 'N.Y.C.']
+  
+  lloaddf['Time'] = pd.to_datetime(lloaddf['Time'])
   pricedf = NYISOData(dataset='lbmp_dam_h', year='2023').df
   pricedff = NYISOData(dataset='lbmp_dam_h', year='2022').df
   pricedfff= NYISOData(dataset='lbmp_dam_h', year='2021').df
@@ -94,8 +95,9 @@ def pricingmodelcalc(postsolarload):
   pricedf = pricedf.loc[:, [('LBMP ($/MWHr)', 'N.Y.C.')]]
   pricedf = pricedf.reset_index()
   pricedf.columns = ['Time', 'N.Y.C.']
+  lloaddf['N.Y.C.'] = lloaddf['N.Y.C.'] * 1000000 #convert MW to W
   pricedf['Time'] = pd.to_datetime(pricedf['Time'])
-  loaddf['Time'] = loaddf['Time'] - pd.Timedelta(hours=5)
+  lloaddf['Time'] = lloaddf['Time'] - pd.Timedelta(hours=5)
   pricedf['Time'] = pricedf['Time'] - pd.Timedelta(hours=5)
 
   #configure given load df
@@ -107,7 +109,7 @@ def pricingmodelcalc(postsolarload):
   postsolarload.rename(columns={'N.Y.C.': 'N.Y.C._x'}, inplace=True)
 
   #merge data
-  data = pd.merge(loaddf, pricedf, on='Time')
+  data = pd.merge(lloaddf, pricedf, on='Time')
   data['day_of_week'] = data['Time'].dt.dayofweek  # 0 = Monday, 6 = Sunday
   data['month'] = data['Time'].dt.month
   data['hour'] = data['Time'].dt.hour
@@ -124,14 +126,39 @@ def pricingmodelcalc(postsolarload):
   plt.xlabel('Actual Prices')
   plt.ylabel('Predicted Prices')
   plt.title('Actual vs Predicted Prices')
-  plt.show()
+  #plt.show()
   mae = mean_absolute_error(y_test, predictions)
   mse = mean_squared_error(y_test, predictions)
+  rmse = mse ** .5
   print(f'Mean Absolute Error: {mae}')
   print(f'Mean Squared Error: {mse}')
+  print(f'Root Mean Squared Error: {rmse}')
 
   #use model
   new_prices = model.predict(postsolarload[['N.Y.C._x', 'day_of_week', 'month', 'hour']])
   postsolarload['predicted_price'] = new_prices
   postsolarload = postsolarload.drop(columns=['day_of_week', 'month', 'hour'])
   return postsolarload
+
+def lbmpsavingscalc(newprices, dfIFNOTvalue = False):
+  ppricedf = NYISOData(dataset='lbmp_dam_h', year='2023').df
+  ppricedff = NYISOData(dataset='lbmp_dam_h', year='2024').df
+  ppricedf = pd.concat([ppricedf, ppricedff], ignore_index=False)
+  ppricedf = ppricedf.loc[:, [('LBMP ($/MWHr)', 'N.Y.C.')]]
+  ppricedf = ppricedf.reset_index()
+  ppricedf.columns = ['Time', 'N.Y.C.']
+  ppricedf['Time'] = pd.to_datetime(ppricedf['Time'])
+  ppricedf['Time'] = ppricedf['Time'] - pd.Timedelta(hours=5)
+  new_dates = newprices['Time'].dt.date.unique()
+  filtered_given = ppricedf[ppricedf['Time'].dt.date.isin(new_dates)]
+  merged = filtered_given
+  merged['N.Y.C._new'] = newprices['predicted_price']
+  merged.columns = ['Time','N.Y.C._given', 'N.Y.C._new']
+  merged['price_difference'] = merged['N.Y.C._given'] - merged['N.Y.C._new']
+  total_savings = merged['price_difference'].sum()
+  print(f"Total Price Savings: {total_savings}")
+  if dfIFNOTvalue == False:
+    return merged['price_difference'].sum()
+  else:
+    merged = merged.drop(columns=['N.Y.C._new', 'N.Y.C._given'])
+    return merged
