@@ -6,9 +6,20 @@ import numpy as np
 import random
 from scipy.ndimage import gaussian_filter1d
 from scipy.stats import norm
+import time
 
+start_time = time.time()
+print(f'start time: {start_time}')
+
+weatherpath = r'10002 2023-07-18 to 2024-07-16.csv'
+buildingpath = r'Building Data.csv'
+FallPath = r'Fall 1026-1029.csv'
+Springpath = r'Spring Hourly 0407-0411.csv'
+Summerpath = r'Summer Hourly 0701-0716.csv'
+Winterpath = r'Winter Hourly 0111-0126.csv'
+loadsavepath = r'NewLoadpostsolar.csv'
 #Weather Data
-originalweatherdf = pd.read_csv(r'C:\Users\danie\Downloads\Loisaida Code\10002 2023-07-18 to 2024-07-16.csv') #read weather csv file
+originalweatherdf = pd.read_csv(weatherpath) #read weather csv file
 originalweatherdf['sunrise'] = pd.to_datetime(originalweatherdf['sunrise']) #cnvert to datetime format
 originalweatherdf['sunset'] = pd.to_datetime(originalweatherdf['sunset'])
 originalweatherdf['day_length'] = originalweatherdf['sunset'] - originalweatherdf['sunrise'] #calc day length
@@ -26,7 +37,7 @@ print('AVG Day Length for the year ' + str(AVGLD))
 
 #Building Data
 
-buildingdf = pd.read_csv(r'C:\Users\danie\Downloads\Loisaida Code\Building Data.csv') #read Building csv file
+buildingdf = pd.read_csv(buildingpath) #read Building csv file
 Buildings = {}
 for index, row in buildingdf.iterrows():
     address = row['Address']
@@ -38,7 +49,6 @@ for index, row in buildingdf.iterrows():
     building = Building(units, TheoSpace, UsagePproperty, numberofbatteries, storagePbattery)
     Buildings[address] = building
 
-
 #NYISO DATA
 loaddf = NYISOData(dataset='load_h', year='2023').df # year argument in local time, but returns dataset in UTC
 otherloaddf =  NYISOData(dataset='load_h', year='2024').df # year argument in local time, but returns dataset in UTC
@@ -46,6 +56,7 @@ loaddf = pd.concat([loaddf, otherloaddf], ignore_index=False)
 loaddf = loaddf.loc[:, ['N.Y.C.']]
 loaddf = loaddf.reset_index()
 loaddf.columns = ['Time', 'N.Y.C.']
+loaddf['Time'] = loaddf['Time'] - pd.Timedelta(hours=5)
 
 #Match Weather Data to NYISO Data
 originalweatherdf['datetime'] = pd.to_datetime(originalweatherdf['datetime']).dt.date
@@ -82,10 +93,10 @@ distributionweatherdf = originalweatherdf.copy()
 #Hourly Data Distribution
 
 #import everything
-Hspringdf = pd.read_csv(r'C:\Users\danie\Downloads\Loisaida Code\Spring Hourly 0407-0411.csv')
-Hsummerdf = pd.read_csv(r'C:\Users\danie\Downloads\Loisaida Code\Summer Hourly 0701-0716.csv')
-Hwinterdf = pd.read_csv(r'C:\Users\danie\Downloads\Loisaida Code\Winter Hourly 0111-0126.csv')
-Hfalldf = pd.read_csv(r'C:\Users\danie\Downloads\Loisaida Code\Fall 1026-1029.csv')
+Hspringdf = pd.read_csv(Springpath)
+Hsummerdf = pd.read_csv(Summerpath)
+Hwinterdf = pd.read_csv(Winterpath)
+Hfalldf = pd.read_csv(FallPath)
 # Concatenate hourly dataframes
 Hourlydf = pd.concat([Hspringdf, Hsummerdf, Hwinterdf, Hfalldf], ignore_index=True)
 # Extract sunrise, sunset, and daily solar energy for the year
@@ -202,4 +213,7 @@ print(f'Expected Total Energy Used:    {expected_total_energy_used} Wh')
 TLoad = loaddf['N.Y.C.'].sum()
 print(f'Total load in NYC befor solar: {TloadBefore} wh')
 print(f'Total load in NYC after Solar: {TLoad} wh')
-loaddf.to_csv(r'C:\Users\danie\Downloads\Loisaida Code\NewLoadpostsolar.csv')
+loaddf.to_csv(loadsavepath)
+end_time = time.time()
+duration = end_time - start_time
+print(f"Execution time: {duration} seconds")

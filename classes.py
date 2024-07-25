@@ -1,6 +1,12 @@
 import random
 import numpy as np
 import pandas as pd
+from sklearn.model_selection import train_test_split
+from sklearn.ensemble import RandomForestRegressor
+from sklearn.metrics import mean_absolute_error, mean_squared_error
+import matplotlib.pyplot as plt
+from nyisotoolkit import NYISOData, NYISOStat, NYISOVis
+import time
 
 class SolarPanel:
   def __init__(self, RatedPowerTotal,  Efficiency, Tolerance, TempCoefficient,refrencetemp = 25, RatedPPC = 0):
@@ -66,3 +72,76 @@ def get_hourly_usage(hour, total_daily_usage):
     # Calculate the hourly usage
     hourly_usage = usage_proportion * total_daily_usage
     return hourly_usage
+
+def pricingmodelcalc(postsolarload):
+  #configure ISO DATA
+  loaddf = NYISOData(dataset='load_h', year='2023').df # year argument in local time, but returns dataset in UTC
+  otherloaddf =  NYISOData(dataset='load_h', year='2022').df # year argument in local time, but returns dataset in UTC
+  otherloaddff =  NYISOData(dataset='load_h', year='2021').df
+  otherloaddfff =  NYISOData(dataset='load_h', year='2020').df
+  otherloaddffff =  NYISOData(dataset='load_h', year='2019').df
+  loaddf = pd.concat([loaddf, otherloaddf, otherloaddff,  otherloaddfff, otherloaddffff], ignore_index=False)
+  loaddf = loaddf.loc[:, ['N.Y.C.']]
+  loaddf = loaddf.reset_index()
+  loaddf.columns = ['Time', 'N.Y.C.']
+  loaddf['Time'] = pd.to_datetime(loaddf['Time'])
+  pricedf = NYISOData(dataset='lbmp_dam_h', year='2023').df
+  pricedff = NYISOData(dataset='lbmp_dam_h', year='2022').df
+  pricedfff= NYISOData(dataset='lbmp_dam_h', year='2021').df
+  pricedffff = NYISOData(dataset='lbmp_dam_h', year='2020').df
+  pricedfffff = NYISOData(dataset='lbmp_dam_h', year='2019').df
+  pricedf = pd.concat([pricedf, pricedff, pricedfff,  pricedffff, pricedfffff], ignore_index=False)
+  pricedf = pricedf.loc[:, [('LBMP ($/MWHr)', 'N.Y.C.')]]
+  pricedf = pricedf.reset_index()
+  pricedf.columns = ['Time', 'N.Y.C.']
+  pricedf['Time'] = pd.to_datetime(pricedf['Time'])
+  loaddf['Time'] = loaddf['Time'] - pd.Timedelta(hours=5)
+  pricedf['Time'] = pricedf['Time'] - pd.Timedelta(hours=5)
+
+  #configure given load df
+  postsolarload['Time'] = pd.to_datetime(postsolarload['Time'])
+  postsolarload['day_of_week'] = postsolarload['Time'].dt.dayofweek  # 0 = Monday, 6 = Sunday
+  postsolarload['month'] = postsolarload['Time'].dt.month
+  postsolarload['hour'] = postsolarload['Time'].dt.hour
+  postsolarload.rename(columns={'N.Y.C.': 'N.Y.C._x'}, inplace=True)
+
+  #merge data
+  data = pd.merge(loaddf, pricedf, on='Time')
+  data['day_of_week'] = data['Time'].dt.dayofweek  # 0 = Monday, 6 = Sunday
+  data['month'] = data['Time'].dt.month
+  data['hour'] = data['Time'].dt.hour
+
+  #Random Forest Model
+  features = ['N.Y.C._x', 'day_of_week', 'month', 'hour']
+  X = data[features]
+  y = data['N.Y.C._y']
+  X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+  model = RandomForestRegressor(n_estimators=100, random_state=42)
+  model.fit(X_train, y_train)
+  predictions = model.predict(X_test)
+  plt.scatter(y_test, predictions)
+  plt.xlabel('Actual Prices')
+  plt.ylabel('Predicted Prices')
+  plt.title('Actual vs Predicted Prices')
+  plt.show()
+  mae = mean_absolute_error(y_test, predictions)
+  mse = mean_squared_error(y_test, predictions)
+  print(f'Mean Absolute Error: {mae}')
+  print(f'Mean Squared Error: {mse}')
+
+  #use model
+  new_prices = model.predict(postsolarload[['N.Y.C._x', 'day_of_week', 'month', 'hour']])
+  postsolarload['predicted_price'] = new_prices
+  postsolarload = postsolarload.drop(columns=['day_of_week', 'month', 'hour'])
+  return postsolarload
+
+
+
+solarloaddf = pd.read_csv(r'NewLoadpostsolar.csv')
+start_time = time.time()
+df = pricingmodelcalc(solarloaddf)
+
+end_time = time.time()
+duration = end_time - start_time
+print(f"Execution time: {duration} seconds")
+print('hi')
