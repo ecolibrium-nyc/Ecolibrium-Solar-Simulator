@@ -7,6 +7,7 @@ from sklearn.metrics import mean_absolute_error, mean_squared_error
 import matplotlib.pyplot as plt
 from nyisotoolkit import NYISOData, NYISOStat, NYISOVis
 import time
+import tkinter as tk
 
 class SolarPanel:
   def __init__(self, RatedPowerTotal,  Efficiency, Tolerance, TempCoefficient,refrencetemp = 25, RatedPPC = 0):
@@ -172,3 +173,16 @@ def netsavingscalc(mergedpricedf, postsolarload, givenloaddf, dfIFNOTvalue = Fal
   if dfIFNOTvalue == True:
     return mergedpricedf['giventotalpricephour'] - mergedpricedf['newtotalpricephour'] 
   return mergedpricedf['giventotalpricephour'].sum() - mergedpricedf['newtotalpricephour'].sum()
+
+def show_GUI(whattoprint):
+    # Create the GUI window
+    root = tk.Tk()
+    root.title("Results")
+    # Display the results in the window
+    text = tk.Text(root, wrap="word", width=60, height=20)
+    text.pack(expand=True, fill="both")
+    # Insert the results into the text widget
+    for printstatement in whattoprint:
+        text.insert(tk.END, printstatement + "\n")
+    # Start the GUI event loop
+    root.mainloop()

@@ -7,6 +7,7 @@ import random
 from scipy.ndimage import gaussian_filter1d
 from scipy.stats import norm
 import time
+import tkinter as tk
 
 start_time = time.time()
 print(f'start time: {start_time}')
@@ -205,21 +206,25 @@ loaddfcopy = loaddf.copy()
 NewLMBPprices = pricingmodelcalc(loaddfcopy)
 LBMPsavings = lbmpsavingscalc(NewLMBPprices)
 
-print(iterations)
-print(f'Total Solar Energy Used:       {SUsed} Wh')
-print(f'Total Grid Energy Used:        {GUsed} Wh')
-print(f'Total Energy Used:             {SUsed+GUsed} Wh')
+#calculations for print statements
 usageongrid = 0
 for x in Buildings:
   usageongrid += (Buildings[x].units * Buildings[x].UsagePproperty)/24 # usagephour
 expected_total_energy_used = iterations * usageongrid  # number of hours iterated * usage on whole grid per hour
-print(f'Expected Total Energy Used:    {expected_total_energy_used} Wh')
 TLoad = loaddf['N.Y.C.'].sum()
-print(f'Total load in NYC befor solar: {TloadBefore} wh')
-print(f'Total load in NYC after Solar: {TLoad} wh')
-print(f'Total LBMP price saved for the year ($/Mwh): ${LBMPsavings}')
-print(f'Average price saved per hour: ${LBMPsavings/iterations}')
-print(f'Net Savings after decreased load: ${netsavingscalc(lbmpsavingscalc(NewLMBPprices, True), loaddfcopy, givenload)}')
 end_time = time.time()
 duration = end_time - start_time
-print(f"Execution time: {duration} seconds")
+
+#Use GUI
+whattoprint = [(f'Total Hourly Iterations:{iterations}'),
+(f'Total Solar Energy Used:       {SUsed} Wh'),
+(f'Total Grid Energy Used:        {GUsed} Wh'),
+(f'Total Energy Used:             {SUsed+GUsed} Wh'),
+(f'Expected Total Energy Used:    {expected_total_energy_used} Wh'),
+(f'Total load in NYC befor solar: {TloadBefore} wh'),
+(f'Total load in NYC after Solar: {TLoad} wh'),
+(f'Total LBMP price saved for the year ($/Mwh): ${LBMPsavings}'),
+(f'Average price saved per hour: ${LBMPsavings/iterations}'),
+(f'Net Savings after decreased load: ${netsavingscalc(lbmpsavingscalc(NewLMBPprices, True), loaddfcopy, givenload)}'),
+(f"Execution time: {duration} seconds")]
+show_GUI(whattoprint)
