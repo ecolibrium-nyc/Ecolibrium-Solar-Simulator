@@ -76,6 +76,7 @@ loaddaily = loaddf.copy()
 
 #set date as the index
 loaddf.set_index('Time', inplace=True)
+givenload = loaddf.copy()
 
 #Convert to daily structure
 loaddaily['Time'] = pd.to_datetime(loaddaily['Time'])
@@ -158,7 +159,7 @@ originalweatherdf['datetime'] = pd.to_datetime(originalweatherdf['datetime'])
 originalweatherdf.set_index('datetime', inplace=True)
 #fix hourly_data_df
 hourly_data_df['date'] = hourly_data_df.apply(lambda row: row['date'].replace(hour=row['hour']), axis=1)
-
+# Start main loop
 for index, row in hourly_data_df.iterrows():
   date = row['date']
   hourly_solar = row['solarenergy']
@@ -210,14 +211,15 @@ print(f'Total Grid Energy Used:        {GUsed} Wh')
 print(f'Total Energy Used:             {SUsed+GUsed} Wh')
 usageongrid = 0
 for x in Buildings:
-  usageongrid +=(Buildings[x].units * Buildings[x].UsagePproperty)/24 # usagephour
+  usageongrid += (Buildings[x].units * Buildings[x].UsagePproperty)/24 # usagephour
 expected_total_energy_used = iterations * usageongrid  # number of hours iterated * usage on whole grid per hour
 print(f'Expected Total Energy Used:    {expected_total_energy_used} Wh')
 TLoad = loaddf['N.Y.C.'].sum()
 print(f'Total load in NYC befor solar: {TloadBefore} wh')
 print(f'Total load in NYC after Solar: {TLoad} wh')
-print(f'Total LBMP price saved: ${LBMPsavings}')
-
+print(f'Total LBMP price saved for the year ($/Mwh): ${LBMPsavings}')
+print(f'Average price saved per hour: ${LBMPsavings/iterations}')
+print(f'Net Savings after decreased load: ${netsavingscalc(lbmpsavingscalc(NewLMBPprices, True), loaddfcopy, givenload)}')
 end_time = time.time()
 duration = end_time - start_time
 print(f"Execution time: {duration} seconds")

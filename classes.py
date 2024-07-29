@@ -140,7 +140,7 @@ def pricingmodelcalc(postsolarload):
   postsolarload = postsolarload.drop(columns=['day_of_week', 'month', 'hour'])
   return postsolarload
 
-def lbmpsavingscalc(newprices, dfIFNOTvalue = False):
+def lbmpsavingscalc(newprices, dfIFNOTvalue = False, dropgivenandnew = False):
   ppricedf = NYISOData(dataset='lbmp_dam_h', year='2023').df
   ppricedff = NYISOData(dataset='lbmp_dam_h', year='2024').df
   ppricedf = pd.concat([ppricedf, ppricedff], ignore_index=False)
@@ -160,5 +160,15 @@ def lbmpsavingscalc(newprices, dfIFNOTvalue = False):
   if dfIFNOTvalue == False:
     return merged['price_difference'].sum()
   else:
-    merged = merged.drop(columns=['N.Y.C._new', 'N.Y.C._given'])
-    return merged
+    if dropgivenandnew == False:
+      return merged
+    else:
+      merged = merged.drop(columns=['N.Y.C._new', 'N.Y.C._given'])
+      return merged
+  
+def netsavingscalc(mergedpricedf, postsolarload, givenloaddf, dfIFNOTvalue = False):
+  mergedpricedf['giventotalpricephour'] = mergedpricedf['N.Y.C._given'] * (givenloaddf['N.Y.C.']/1000000)
+  mergedpricedf['newtotalpricephour'] = mergedpricedf['N.Y.C._new'] * (postsolarload['N.Y.C._x']/1000000)
+  if dfIFNOTvalue == True:
+    return mergedpricedf['giventotalpricephour'] - mergedpricedf['newtotalpricephour'] 
+  return mergedpricedf['giventotalpricephour'].sum() - mergedpricedf['newtotalpricephour'].sum()
