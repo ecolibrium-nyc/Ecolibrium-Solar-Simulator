@@ -10,22 +10,31 @@ import time
 import tkinter as tk
 
 class SolarPanel:
-  def __init__(self, RatedPowerTotal,  Efficiency, Tolerance, TempCoefficient,refrencetemp = 25, RatedPPC = 0):
+  def __init__(self, RatedPowerTotal,  Efficiency, Tolerance, TempCoefficient,ChargeControllerEfficiency, refrencetemp = 25, RatedPPC = 0):
     self.RatedPowerTotal = RatedPowerTotal
     self.RatedPPC = RatedPPC
     self.Efficiency = Efficiency
     self.Tolerance = Tolerance
+    self.ChargeControllerEfficiency = ChargeControllerEfficiency
     self.refrencetemp = refrencetemp
     self.TempCoefficient = TempCoefficient
 
 class Building:
-  def __init__(self, units, TheoSpace, UsagePproperty, numberofbatteries, storagePbattery, BatteryLevel=0): #add charging factors
+  def __init__(self, units, TheoSpace, TotalSquareFeet, UsagePproperty, numberofbatteries, storagePbattery, MaxCharge, MaxDischarge, BatteryRoomTemp, BatteryRoomHumid, BatteryAge, InvertEfficiency, BatteryLevel=0): #add charging factors
     self.units = units
     self.TheoSpace = TheoSpace
+    self.TotalSquareFeet = TotalSquareFeet
     self.UsagePproperty = UsagePproperty
     self.numberofbatteries = numberofbatteries
     self.storagePbattery = storagePbattery
+    self.MaxCharge = MaxCharge
+    self.MaxDischarge = MaxDischarge
+    self.BatteryRoomTemp = BatteryRoomTemp
+    self.BatteryRoomHumid = BatteryRoomHumid
+    self.BatteryAge = BatteryAge
+    self.InvertEfficiency = InvertEfficiency
     self.BatteryLevel = BatteryLevel
+
   def __str__(self):
     return f"Building(units={self.units}, TheoSpace={self.TheoSpace}, UsagePproperty={self.UsagePproperty}, numberofbatteries={self.numberofbatteries}, storagePbattery={self.storagePbattery}, BatteryLevel={self.BatteryLevel})"
 
@@ -42,6 +51,53 @@ def calcsolarpperiod(solarenergy, solarpanel, weatherdf, dates):
   solarforday *= (1 + round(random.uniform(0, solarpanel.Tolerance), 5)) #takes into account tolerance rating on a random scale up to 5 decimal points
   solarforday *= (1-solarpanel.TempCoefficient*(weatherdf.loc[dates.strftime('%Y-%m-%d'), 'temp'] - solarpanel.refrencetemp)) #take into account weather
   return solarforday
+
+def calcbatteryrates(buildingobject, chargeFalseordisTrue = False):
+  def calculate_temp_effect(room_temp):
+    #convert to C
+    room_temp = (room_temp - 32) * (5/9)
+    # Optimal temperature range for lithium-ion batteries
+    optimal_temp_min = 20  # °C
+    optimal_temp_max = 25  # °C
+    if room_temp < optimal_temp_min:
+        # Reduced efficiency due to cold temperatures
+        return max(0.8, (room_temp - 10) / optimal_temp_min)  # Assuming linear degradation
+    elif room_temp > optimal_temp_max:
+        # Reduced efficiency due to high temperatures
+        return max(0.8, (40 - room_temp) / (40 - optimal_temp_max))  # Assuming linear degradation
+    else:
+        # Optimal efficiency
+        return 1.0
+  def calculate_humidity_effect(room_humidity):
+    room_humidity *= 100
+    # Optimal humidity range for battery rooms
+    optimal_humidity_min = 40  # %
+    optimal_humidity_max = 60  # %
+    if room_humidity < optimal_humidity_min:
+        # Lower end of the optimal range; no significant impact
+        return 1.0
+    elif room_humidity > optimal_humidity_max:
+        # Reduced efficiency due to high humidity
+        return max(0.9, (80 - room_humidity) / (80 - optimal_humidity_max))  # Assuming linear degradation
+    else:
+        # Optimal efficiency
+        return 1.0
+  def calculate_battery_age_factor(age_years):
+    # Define parameters for the degradation model
+    max_degradation = 0.3     # Maximum degradation factor (e.g., 30% loss in efficiency)
+    # Exponential decay model for degradation
+    # This model assumes that degradation accelerates over time
+    degradation_factor = 1 - max_degradation * (1 - np.exp(-0.05 * age_years))
+    # Ensure that the factor is not less than 0 (though practical batteries would not degrade to 0%)
+    return max(degradation_factor, 0.0)
+  if chargeFalseordisTrue == False:
+     return buildingobject.MaxCharge * calculate_temp_effect(buildingobject.BatteryRoomTemp) * calculate_humidity_effect(buildingobject.BatteryRoomHumid) * calculate_battery_age_factor(buildingobject.BatteryAge)
+  else: 
+     return buildingobject.MaxDischarge * calculate_temp_effect(buildingobject.BatteryRoomTemp) * calculate_humidity_effect(buildingobject.BatteryRoomHumid) * calculate_battery_age_factor(buildingobject.BatteryAge)
+ 
+    
+  
+
 
 def get_hourly_usage(hour, total_daily_usage):
     def usage_pattern(hour):
@@ -119,8 +175,8 @@ def pricingmodelcalc(postsolarload):
   features = ['N.Y.C._x', 'day_of_week', 'month', 'hour']
   X = data[features]
   y = data['N.Y.C._y']
-  X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=1, random_state=42)
-  model = RandomForestRegressor(n_estimators=500, random_state=42)
+  X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=.95, random_state=32)
+  model = RandomForestRegressor(n_estimators=200, random_state=32)
   model.fit(X_train, y_train)
   predictions = model.predict(X_test)
   plt.scatter(y_test, predictions)
@@ -157,7 +213,6 @@ def lbmpsavingscalc(newprices, dfIFNOTvalue = False, dropgivenandnew = False):
   merged.columns = ['Time','N.Y.C._given', 'N.Y.C._new']
   merged['price_difference'] = merged['N.Y.C._given'] - merged['N.Y.C._new']
   total_savings = merged['price_difference'].sum()
-  print(f"Total Price Savings: {total_savings}")
   if dfIFNOTvalue == False:
     return merged['price_difference'].sum()
   else:

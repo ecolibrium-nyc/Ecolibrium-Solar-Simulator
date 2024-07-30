@@ -14,5 +14,3 @@ Overarching Goals:
 
 
 PLANS: FIX LOAD BUG, MULTIPROCESS THE INNER FOR LOOP, FIX DICT PROBLEM
-
-Flow Chart to visualize code can be viewed here: https://baruchmailcuny-my.sharepoint.com/:o:/g/personal/daniel_yadgarov_baruchmail_cuny_edu/EqSXsjcQ6n5DrTcZ3pWrlpQBQZnXh0K24mVHlEuDpKry0Q?rtime=6KEgT8yw3Eg

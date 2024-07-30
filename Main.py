@@ -8,6 +8,10 @@ from scipy.ndimage import gaussian_filter1d
 from scipy.stats import norm
 import time
 import tkinter as tk
+from packageinistaller import *
+
+#option to install packages or run file seperately
+#installpackages()
 
 start_time = time.time()
 print(f'start time: {start_time}')
@@ -44,10 +48,19 @@ for index, row in buildingdf.iterrows():
     address = row['Address']
     units = row['Number of Units']
     TheoSpace = row['Theoretical Space for Panels (m^2)']
+    TotalSquareFeet = row['Total Square Feet']
     UsagePproperty = row['Average usage per unit per day (w)']
     numberofbatteries = row['Number of Batteries in Building']
     storagePbattery = row['Storage Size Per Battery (Watts)']
-    building = Building(units, TheoSpace, UsagePproperty, numberofbatteries, storagePbattery)
+    MaxCharge = row['Base Max Charge Rate (wh)']
+    MaxDischarge = row['Base Max Discharge Rate (wh)']
+    BatteryRoomTemp = row['Average Battery Room Temperature (F)']
+    BatteryRoomHumid = row['Average Battery Room Humidity (percentage)']
+    BatteryAge = row['Battery Age (y)']
+    InvertEfficiency = row['Inverter Efficiency (percentage)']
+    building = Building(units, TheoSpace, TotalSquareFeet, UsagePproperty, numberofbatteries, 
+    storagePbattery, MaxCharge , MaxDischarge, BatteryRoomTemp, 
+    BatteryRoomHumid, BatteryAge, InvertEfficiency)
     Buildings[address] = building
 
 #NYISO DATA
@@ -154,7 +167,7 @@ iterations=0
              'Address2': Building(50, 2500, 10000, 100, 5000),
              'Address3': Building(200, 2500, 10000, 400, 5000),
              'Address4': Building(1000, 2500, 10000, 2000, 5000)}"""
-BasePanel = SolarPanel(500, .21, .05, .003)
+BasePanel = SolarPanel(500, .21, .05, .003, .995)
 hourly_data_df['date'] = pd.to_datetime(hourly_data_df['date'])
 originalweatherdf['datetime'] = pd.to_datetime(originalweatherdf['datetime'])
 originalweatherdf.set_index('datetime', inplace=True)
@@ -165,42 +178,56 @@ for index, row in hourly_data_df.iterrows():
   date = row['date']
   hourly_solar = row['solarenergy']
   energyproduced = calcsolarpperiod(hourly_solar, BasePanel, originalweatherdf, date) #take into account solar panel efficiencies
+  energyproduced *= BasePanel.ChargeControllerEfficiency
   for address in Buildings:
       energy_stored = 0
       energy_needed = (get_hourly_usage(date.hour,Buildings[address].units * Buildings[address].UsagePproperty))
       energy_obtained = Buildings[address].TheoSpace * energyproduced
 
-      # Prioritize battery storage
+      #calc max charge and discharge rate
+      max_charge_rate = calcbatteryrates(Buildings[address])
+      max_discharge_rate = calcbatteryrates(Buildings[address], True)
+
+      # Prioritize battery storage with charging limit
       if Buildings[address].BatteryLevel < 1:
           remainingstorage = (1 - Buildings[address].BatteryLevel) * Buildings[address].storagePbattery * Buildings[address].numberofbatteries
-          if energy_obtained >= remainingstorage:
-              energy_stored = remainingstorage
-              Buildings[address].BatteryLevel = 1
+          max_charge = min(remainingstorage, max_charge_rate)
+          if energy_obtained >= max_charge:
+              energy_stored = max_charge
+              Buildings[address].BatteryLevel +=  max_charge / (Buildings[address].storagePbattery * Buildings[address].numberofbatteries)
+              energy_obtained -= max_charge
           else:
               energy_stored = energy_obtained
               Buildings[address].BatteryLevel += energy_stored / (Buildings[address].storagePbattery * Buildings[address].numberofbatteries)
-          energy_obtained -= energy_stored
+              energy_obtained -= energy_stored
 
       # Use stored energy if solar energy is insufficient
+      energy_obtained *= Buildings[address].InvertEfficiency
       if energy_obtained < energy_needed:
           energy_needed -= energy_obtained
-          if  Buildings[address].BatteryLevel > 0:
-              if Buildings[address].BatteryLevel * Buildings[address].storagePbattery * Buildings[address].numberofbatteries >= energy_needed:
-                  Buildings[address].BatteryLevel -= energy_needed / (Buildings[address].storagePbattery * Buildings[address].numberofbatteries)
-                  SUsed += energy_needed
-                  loaddf.at[date, 'N.Y.C.'] -= energy_needed
-                  energy_needed = 0
-              else:
-                  SUsed += Buildings[address].BatteryLevel * Buildings[address].storagePbattery * Buildings[address].numberofbatteries
-                  loaddf.at[date, 'N.Y.C.'] -= Buildings[address].BatteryLevel * Buildings[address].storagePbattery * Buildings[address].numberofbatteries
-                  energy_needed -= Buildings[address].BatteryLevel * Buildings[address].storagePbattery * Buildings[address].numberofbatteries
-                  Buildings[address].BatteryLevel = 0
+          if Buildings[address].BatteryLevel > 0:
+                available_energy = Buildings[address].BatteryLevel * Buildings[address].storagePbattery * Buildings[address].numberofbatteries
+                if available_energy >= energy_needed:
+                    discharge_amount = min(energy_needed, max_discharge_rate)
+                    Buildings[address].BatteryLevel -= discharge_amount / (Buildings[address].storagePbattery * Buildings[address].numberofbatteries)
+                    SUsed += discharge_amount
+                    loaddf.at[date, 'N.Y.C.'] -= discharge_amount
+                    energy_needed -= discharge_amount
+                else:
+                    discharge_amount = min(available_energy, max_discharge_rate)
+                    SUsed += discharge_amount
+                    loaddf.at[date, 'N.Y.C.'] -= discharge_amount
+                    energy_needed -= discharge_amount
+                    Buildings[address].BatteryLevel -= discharge_amount / (Buildings[address].storagePbattery * Buildings[address].numberofbatteries)
+                    if Buildings[address].BatteryLevel < 0:
+                        Buildings[address].BatteryLevel = 0
           GUsed += energy_needed
       else:
           SUsed += energy_needed
           loaddf.at[date, 'N.Y.C.'] -= energy_needed
   iterations +=1
 
+print('Loop done')
 #calculate new ISO price data assuming Solar load decreases
 loaddfcopy = loaddf.copy()
 NewLMBPprices = pricingmodelcalc(loaddfcopy)
