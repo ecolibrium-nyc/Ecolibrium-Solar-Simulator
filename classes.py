@@ -81,7 +81,7 @@ def pricingmodelcalc(postsolarload):
   otherlloaddff =  NYISOData(dataset='load_h', year='2021').df
   otherlloaddfff =  NYISOData(dataset='load_h', year='2020').df
   otherlloaddffff =  NYISOData(dataset='load_h', year='2019').df
-  lloaddf = pd.concat([lloaddf, otherlloaddf, otherlloaddff,  otherlloaddfff, otherlloaddffff], ignore_index=False)
+  lloaddf = pd.concat([lloaddf, otherlloaddf, otherlloaddff, otherlloaddfff, otherlloaddffff], ignore_index=False)
   lloaddf = lloaddf.loc[:, ['N.Y.C.']]
   lloaddf = lloaddf.reset_index()
   lloaddf.columns = ['Time', 'N.Y.C.']
@@ -92,7 +92,7 @@ def pricingmodelcalc(postsolarload):
   pricedfff= NYISOData(dataset='lbmp_dam_h', year='2021').df
   pricedffff = NYISOData(dataset='lbmp_dam_h', year='2020').df
   pricedfffff = NYISOData(dataset='lbmp_dam_h', year='2019').df
-  pricedf = pd.concat([pricedf, pricedff, pricedfff,  pricedffff, pricedfffff], ignore_index=False)
+  pricedf = pd.concat([pricedf, pricedff, pricedfff, pricedffff, pricedfffff], ignore_index=False)
   pricedf = pricedf.loc[:, [('LBMP ($/MWHr)', 'N.Y.C.')]]
   pricedf = pricedf.reset_index()
   pricedf.columns = ['Time', 'N.Y.C.']
@@ -119,8 +119,8 @@ def pricingmodelcalc(postsolarload):
   features = ['N.Y.C._x', 'day_of_week', 'month', 'hour']
   X = data[features]
   y = data['N.Y.C._y']
-  X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
-  model = RandomForestRegressor(n_estimators=100, random_state=42)
+  X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=1, random_state=42)
+  model = RandomForestRegressor(n_estimators=500, random_state=42)
   model.fit(X_train, y_train)
   predictions = model.predict(X_test)
   plt.scatter(y_test, predictions)
