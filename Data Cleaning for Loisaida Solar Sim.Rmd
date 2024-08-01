@@ -1,0 +1,127 @@
+---
+title: "Loisaida Solar Project"
+author: "Khalil Allwood"
+date: "2024-07-16"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+rm(list = ls())
+```
+
+
+```{r}
+if (!require("pacman")){install.packages("pacman")}
+pacman::p_load(tidyverse,skimr,stringr,magrittr,R.utils,lubridate,zoo)
+```
+
+
+```{r}
+
+rm(list = ls())
+
+load_2023 = read.csv("C:/Users/Khalil/Downloads/lbmp_day_ahead_load_2023.csv")
+load_2022 = read.csv("C:/Users/Khalil/Downloads/lbmp_day_ahead_load_2022.csv")
+
+load_2023 = load_2023 %>% mutate(date_time = str_extract(
+Time.Stamp, "\\d{4}-\\d{2}-\\d{2}\\s\\d{2}:\\d{2}:\\d{2}"))
+
+load_2022 = load_2022 %>% mutate(date_time = str_extract(
+Time.Stamp, "\\d{4}-\\d{2}-\\d{2}\\s\\d{2}:\\d{2}:\\d{2}"))
+
+
+load_2023 = load_2023 %>% select(date_time, N.Y.C.)
+load_2022 = load_2022 %>% select(date_time,N.Y.C.)
+
+load_data = rbind(load_2023, load_2022)
+
+load_data$date_time =  ymd_hms(load_data$date_time)
+
+```
+
+
+
+```{r}
+
+price_2023 = read.csv("C:/Users/Khalil/Downloads/lbmp_cost_2023.csv")
+
+price_2023 = price_2023 %>% mutate(date_time = str_extract(
+Time.Stamp, "\\d{4}-\\d{2}-\\d{2}\\s\\d{2}:\\d{2}:\\d{2}"))
+
+price_2023 = price_2023 %>% select(date_time,LBMP....MWHr..N.Y.C.,Marginal.Cost.Losses....MWHr..N.Y.C.,Marginal.Cost.Congestion....MWHr..N.Y.C.)
+
+
+price_2023 = price_2023[-1,]
+
+price_2022 = read.csv("C:/Users/Khalil/Downloads/lbmp_cost_2022.csv")
+
+price_2022 = price_2022 %>% mutate(date_time = str_extract(
+Time.Stamp, "\\d{4}-\\d{2}-\\d{2}\\s\\d{2}:\\d{2}:\\d{2}"))
+
+price_2022 = price_2022  %>% select(date_time,LBMP....MWHr..N.Y.C.,Marginal.Cost.Losses....MWHr..N.Y.C.,Marginal.Cost.Congestion....MWHr..N.Y.C.)
+
+price_data = rbind(price_2022,price_2023)  
+
+price_data = price_data[-1,]
+
+price_data$date_time =  ymd_hms(price_data$date_time)
+
+```
+
+
+```{r}
+weather_data = read.csv("C:/Users/Khalil/Downloads/nyc_hourly_weather_2022_2023.csv")
+
+weather_data$temp = weather_data$temp * 9/5 + 32
+
+weather_data = weather_data %>% mutate(date_time = str_extract(
+time, "\\d{4}-\\d{2}-\\d{2}\\s\\d{2}:\\d{2}:\\d{2}"))
+
+weather_data = weather_data %>% select(-time,-snow, -wpgt, -tsun)
+
+weather_data = weather_data %>% select(date_time ,everything())
+
+weather_data$date_time =  ymd_hms(weather_data$date_time)
+
+min(price_data$date_time)
+
+min(weather_data$date_time)
+
+
+weather_data$date_time[1]
+
+
+# Merge the data frames to keep only matching date_times
+merged_data <- inner_join(price_data, load_data, by = "date_time")
+
+# Merge the data frames to keep only matching date_times
+merged_data <- inner_join(merged_data, weather_data, by = "date_time")
+
+names(merged_data)[names(merged_data) == 'Load'] <- 'NYC Load'
+
+merged_data$date_time = as.character(merged_data$date_time)
+
+
+
+```
+
+
+
+```{r}
+write.csv(price_2023, file = "C:/Users/Khalil/Downloads/fixed_ISO_price_data_2023.csv", row.names = FALSE)
+write.csv(price_2022, file = "C:/Users/Khalil/Downloads/fixed_ISO_price_data_2022.csv", row.names = FALSE)
+write.csv(load_2023, file = "C:/Users/Khalil/Downloads/fixed_ISO_load_data_2023.csv", row.names = FALSE)
+write.csv(load_2022, file = "C:/Users/Khalil/Downloads/fixed_ISO_load_data_2022.csv", row.names = FALSE)
+
+write.csv(merged_data, file = "C:/Users/Khalil/Downloads/merged_data.csv", row.names = FALSE)
+
+
+
+```
+
+
+
