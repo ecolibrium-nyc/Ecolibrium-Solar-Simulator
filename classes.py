@@ -8,6 +8,7 @@ import matplotlib.pyplot as plt
 from nyisotoolkit import NYISOData, NYISOStat, NYISOVis
 import time
 import tkinter as tk
+from sklearn.model_selection import train_test_split, GridSearchCV, cross_val_score
 
 class SolarPanel:
   def __init__(self, RatedPowerTotal,  Efficiency, Tolerance, TempCoefficient,ChargeControllerEfficiency, refrencetemp = 25, RatedPPC = 0):
@@ -175,15 +176,34 @@ def pricingmodelcalc(postsolarload):
   features = ['N.Y.C._x', 'day_of_week', 'month', 'hour']
   X = data[features]
   y = data['N.Y.C._y']
-  X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=.95, random_state=32)
-  model = RandomForestRegressor(n_estimators=200, random_state=32)
+  X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=.3, random_state=32)
+
+  # Model tuning with GridSearchCV
+  param_grid = {
+      'n_estimators': [100, 200],
+      'max_depth': [None, 10, 20],
+      'min_samples_split': [2, 5],
+      'min_samples_leaf': [1, 4]
+  }
+    
+  model = GridSearchCV(RandomForestRegressor(random_state=32), param_grid, cv=5, n_jobs=-1, scoring='neg_mean_squared_error')
   model.fit(X_train, y_train)
+    
+  # Best model
+  best_model = model.best_estimator_
+    
+  # Cross-validation
+  cv_scores = cross_val_score(best_model, X, y, cv=5, scoring='neg_mean_squared_error')
+  print(f'Cross-Validation Mean Squared Error: {-cv_scores.mean()}')
   predictions = model.predict(X_test)
-  plt.scatter(y_test, predictions)
-  plt.xlabel('Actual Prices')
-  plt.ylabel('Predicted Prices')
-  plt.title('Actual vs Predicted Prices')
-  #plt.show()
+  # Create scatter plot with y=x line
+  fig, ax = plt.subplots()
+  ax.scatter(y_test, predictions)
+  ax.plot([y_test.min(), y_test.max()], [y_test.min(), y_test.max()], color='red', linestyle='--')  # y=x line
+  ax.set_xlabel('Actual Prices')
+  ax.set_ylabel('Predicted Prices')
+  ax.set_title('Actual vs Predicted Prices')
+  plt.show()
   mae = mean_absolute_error(y_test, predictions)
   mse = mean_squared_error(y_test, predictions)
   rmse = mse ** .5

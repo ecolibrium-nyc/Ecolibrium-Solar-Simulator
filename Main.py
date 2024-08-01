@@ -64,6 +64,7 @@ for index, row in buildingdf.iterrows():
     Buildings[address] = building
 
 #NYISO DATA
+#load
 loaddf = NYISOData(dataset='load_h', year='2023').df # year argument in local time, but returns dataset in UTC
 otherloaddf =  NYISOData(dataset='load_h', year='2024').df # year argument in local time, but returns dataset in UTC
 loaddf = pd.concat([loaddf, otherloaddf], ignore_index=False)
@@ -71,6 +72,14 @@ loaddf = loaddf.loc[:, ['N.Y.C.']]
 loaddf = loaddf.reset_index()
 loaddf.columns = ['Time', 'N.Y.C.']
 loaddf['Time'] = loaddf['Time'] - pd.Timedelta(hours=5)
+#price
+priceedf = NYISOData(dataset='lbmp_dam_h', year='2024').df
+priceedff = NYISOData(dataset='lbmp_dam_h', year='2023').df
+pricedf = pd.concat([priceedf, priceedff], ignore_index=False)
+pricedf = pricedf.loc[:, [('LBMP ($/MWHr)', 'N.Y.C.')]]
+pricedf = pricedf.reset_index()
+pricedf.columns = ['Time', 'N.Y.C.']
+pricedf['Time'] = pricedf['Time'] - pd.Timedelta(hours=5)
 
 #Match Weather Data to NYISO Data
 originalweatherdf['datetime'] = pd.to_datetime(originalweatherdf['datetime']).dt.date
@@ -158,15 +167,15 @@ hourly_data_df = pd.concat(hourly_data_list).reset_index(drop=True)
 # Print the resulting DataFrame
 #print(hourly_data_df)
 
+# Initialize empty DataFrames for old and new loads
+old_loads_df = pd.DataFrame(index=hourly_data_df['date'].unique(), columns=Buildings.keys())
+new_loads_df = pd.DataFrame(index=hourly_data_df['date'].unique(), columns=Buildings.keys())
+
 #Main Project
 Blevel = 0 #represented as a percentage(.1 = 10%)
 SUsed = 0
 GUsed = 0
 iterations=0
-"""Buildings = {'Address1': Building(100, 2500, 10000, 200, 5000),
-             'Address2': Building(50, 2500, 10000, 100, 5000),
-             'Address3': Building(200, 2500, 10000, 400, 5000),
-             'Address4': Building(1000, 2500, 10000, 2000, 5000)}"""
 BasePanel = SolarPanel(500, .21, .05, .003, .995)
 hourly_data_df['date'] = pd.to_datetime(hourly_data_df['date'])
 originalweatherdf['datetime'] = pd.to_datetime(originalweatherdf['datetime'])
@@ -181,57 +190,73 @@ for index, row in hourly_data_df.iterrows():
   energyproduced *= BasePanel.ChargeControllerEfficiency
   for address in Buildings:
       energy_stored = 0
-      energy_needed = (get_hourly_usage(date.hour,Buildings[address].units * Buildings[address].UsagePproperty))
-      energy_obtained = Buildings[address].TheoSpace * energyproduced
+      building = Buildings[address]
+      energy_needed = (get_hourly_usage(date.hour,building.units * building.UsagePproperty))
+      # Update old load DataFrames
+      old_loads_df.at[date, address] = (get_hourly_usage(date.hour,building.units * building.UsagePproperty))
+      energy_obtained = building.TheoSpace * energyproduced
 
-      #calc max charge and discharge rate
-      max_charge_rate = calcbatteryrates(Buildings[address])
-      max_discharge_rate = calcbatteryrates(Buildings[address], True)
+      #calc max charge and discharge rate, for one battery
+      max_charge_rate = calcbatteryrates(building)
+      max_discharge_rate = calcbatteryrates(building, True)
+
+      #calc total charge rate for all batteries in building
+      max_charge_rate *= building.numberofbatteries
+      max_discharge_rate *= building.numberofbatteries
 
       # Prioritize battery storage with charging limit
-      if Buildings[address].BatteryLevel < 1:
-          remainingstorage = (1 - Buildings[address].BatteryLevel) * Buildings[address].storagePbattery * Buildings[address].numberofbatteries
+      if building.BatteryLevel < 1:
+          remainingstorage = (1 - building.BatteryLevel) * building.storagePbattery * building.numberofbatteries
           max_charge = min(remainingstorage, max_charge_rate)
           if energy_obtained >= max_charge:
               energy_stored = max_charge
-              Buildings[address].BatteryLevel +=  max_charge / (Buildings[address].storagePbattery * Buildings[address].numberofbatteries)
+              building.BatteryLevel +=  max_charge / (building.storagePbattery * building.numberofbatteries)
               energy_obtained -= max_charge
           else:
               energy_stored = energy_obtained
-              Buildings[address].BatteryLevel += energy_stored / (Buildings[address].storagePbattery * Buildings[address].numberofbatteries)
+              building.BatteryLevel += energy_stored / (building.storagePbattery * building.numberofbatteries)
               energy_obtained -= energy_stored
 
       # Use stored energy if solar energy is insufficient
-      energy_obtained *= Buildings[address].InvertEfficiency
+      energy_obtained *= building.InvertEfficiency
       if energy_obtained < energy_needed:
           energy_needed -= energy_obtained
-          if Buildings[address].BatteryLevel > 0:
-                available_energy = Buildings[address].BatteryLevel * Buildings[address].storagePbattery * Buildings[address].numberofbatteries
+          if building.BatteryLevel > 0:
+                available_energy = building.BatteryLevel * building.storagePbattery * building.numberofbatteries
                 if available_energy >= energy_needed:
                     discharge_amount = min(energy_needed, max_discharge_rate)
-                    Buildings[address].BatteryLevel -= discharge_amount / (Buildings[address].storagePbattery * Buildings[address].numberofbatteries)
+                    building.BatteryLevel -= discharge_amount / (building.storagePbattery * building.numberofbatteries)
                     SUsed += discharge_amount
+                    # Update new load DataFrames
+                    new_loads_df[date, address] = old_loads_df.loc[date, address] - discharge_amount
                     loaddf.at[date, 'N.Y.C.'] -= discharge_amount
                     energy_needed -= discharge_amount
                 else:
                     discharge_amount = min(available_energy, max_discharge_rate)
                     SUsed += discharge_amount
+                    # Update new load DataFrames
+                    new_loads_df[date, address] = old_loads_df.loc[date, address] - discharge_amount
                     loaddf.at[date, 'N.Y.C.'] -= discharge_amount
                     energy_needed -= discharge_amount
-                    Buildings[address].BatteryLevel -= discharge_amount / (Buildings[address].storagePbattery * Buildings[address].numberofbatteries)
-                    if Buildings[address].BatteryLevel < 0:
-                        Buildings[address].BatteryLevel = 0
+                    building.BatteryLevel -= discharge_amount / (building.storagePbattery * building.numberofbatteries)
+                    if building.BatteryLevel < 0:
+                        building.BatteryLevel = 0
           GUsed += energy_needed
       else:
           SUsed += energy_needed
+          new_loads_df[date, address] = old_loads_df.loc[date, address] - energy_needed
           loaddf.at[date, 'N.Y.C.'] -= energy_needed
   iterations +=1
 
-print('Loop done')
+#check how long loop takes to run
+looptime = time.time()
+looptime -= start_time
+print(f'Loop done in : {looptime} seconds!')
+
 #calculate new ISO price data assuming Solar load decreases
 loaddfcopy = loaddf.copy()
-NewLMBPprices = pricingmodelcalc(loaddfcopy)
-LBMPsavings = lbmpsavingscalc(NewLMBPprices)
+NewLBMPprices = pricingmodelcalc(loaddfcopy)
+LBMPsavings = lbmpsavingscalc(NewLBMPprices)
 
 #calculations for print statements
 usageongrid = 0
@@ -239,6 +264,14 @@ for x in Buildings:
   usageongrid += (Buildings[x].units * Buildings[x].UsagePproperty)/24 # usagephour
 expected_total_energy_used = iterations * usageongrid  # number of hours iterated * usage on whole grid per hour
 TLoad = loaddf['N.Y.C.'].sum()
+
+#Building Level Savings calculations
+difference_in_loads = old_loads_df - new_loads_df
+avgloadsavperdayperbuild = difference_in_loads.values.mean()
+
+#old_total_price_df = old_loads_df.multiply(price_df['Price'], axis=0)
+
+
 end_time = time.time()
 duration = end_time - start_time
 
@@ -252,6 +285,6 @@ whattoprint = [(f'Total Hourly Iterations:{iterations}'),
 (f'Total load in NYC after Solar: {TLoad} wh'),
 (f'Total LBMP price saved for the year ($/Mwh): ${LBMPsavings}'),
 (f'Average price saved per hour: ${LBMPsavings/iterations}'),
-(f'Net Savings after decreased load: ${netsavingscalc(lbmpsavingscalc(NewLMBPprices, True), loaddfcopy, givenload)}'),
+(f'Net Savings after decreased load: ${netsavingscalc(lbmpsavingscalc(NewLBMPprices, True), loaddfcopy, givenload)}'),
 (f"Execution time: {duration} seconds")]
 show_GUI(whattoprint)
