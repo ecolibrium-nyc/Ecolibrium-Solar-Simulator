@@ -179,22 +179,23 @@ def pricingmodelcalc(postsolarload):
   X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=.3, random_state=32)
 
   # Model tuning with GridSearchCV
-  param_grid = {
-      'n_estimators': [100, 200],
-      'max_depth': [None, 10, 20],
-      'min_samples_split': [2, 5],
-      'min_samples_leaf': [1, 4]
-  }
+  #param_grid = {
+  #    'n_estimators': [100, 200],
+  #    'max_depth': [None, 10, 20],
+  #    'min_samples_split': [2, 5],
+  #    'min_samples_leaf': [1, 4]
+  #}
     
-  model = GridSearchCV(RandomForestRegressor(random_state=32), param_grid, cv=5, n_jobs=-1, scoring='neg_mean_squared_error')
+  #model = GridSearchCV(RandomForestRegressor(random_state=32), param_grid, cv=5, n_jobs=-1, scoring='neg_mean_squared_error')
+  model = RandomForestRegressor(n_estimators=100, random_state=32)
   model.fit(X_train, y_train)
     
   # Best model
-  best_model = model.best_estimator_
+  #best_model = model.best_estimator_
     
   # Cross-validation
-  cv_scores = cross_val_score(best_model, X, y, cv=5, scoring='neg_mean_squared_error')
-  print(f'Cross-Validation Mean Squared Error: {-cv_scores.mean()}')
+  #cv_scores = cross_val_score(best_model, X, y, cv=5, scoring='neg_mean_squared_error')
+  #print(f'Cross-Validation Mean Squared Error: {-cv_scores.mean()}')
   predictions = model.predict(X_test)
   # Create scatter plot with y=x line
   fig, ax = plt.subplots()
@@ -254,7 +255,7 @@ def show_GUI(whattoprint):
     root = tk.Tk()
     root.title("Results")
     # Display the results in the window
-    text = tk.Text(root, wrap="word", width=60, height=20)
+    text = tk.Text(root, wrap="word", width=100, height=20)
     text.pack(expand=True, fill="both")
     # Insert the results into the text widget
     for printstatement in whattoprint:

@@ -75,11 +75,11 @@ loaddf['Time'] = loaddf['Time'] - pd.Timedelta(hours=5)
 #price
 priceedf = NYISOData(dataset='lbmp_dam_h', year='2024').df
 priceedff = NYISOData(dataset='lbmp_dam_h', year='2023').df
-pricedf = pd.concat([priceedf, priceedff], ignore_index=False)
-pricedf = pricedf.loc[:, [('LBMP ($/MWHr)', 'N.Y.C.')]]
-pricedf = pricedf.reset_index()
-pricedf.columns = ['Time', 'N.Y.C.']
-pricedf['Time'] = pricedf['Time'] - pd.Timedelta(hours=5)
+priceedf = pd.concat([priceedf, priceedff], ignore_index=False)
+priceedf = priceedf.loc[:, [('LBMP ($/MWHr)', 'N.Y.C.')]]
+priceedf = priceedf.reset_index()
+priceedf.columns = ['Time', 'N.Y.C.']
+priceedf['Time'] = priceedf['Time'] - pd.Timedelta(hours=5)
 
 #Match Weather Data to NYISO Data
 originalweatherdf['datetime'] = pd.to_datetime(originalweatherdf['datetime']).dt.date
@@ -92,6 +92,16 @@ loaddf['Time'] = loaddf.apply(
 )
 loaddf = loaddf.drop(columns=['Hour', 'saved_hour'])
 loaddf['N.Y.C.'] = loaddf['N.Y.C.'] * 1000000 #convert MW to W
+
+priceedf['Time'] = pd.to_datetime(priceedf['Time'])
+priceedf['Hour'] = priceedf['Time'].dt.hour
+priceedf['saved_hour'] = priceedf['Hour']
+priceedf = priceedf[priceedf['Time'].dt.date.isin(originalweatherdf['datetime'])]
+priceedf['Time'] = priceedf.apply(
+    lambda row: pd.to_datetime(row['Time'].date()) + pd.DateOffset(hours=row['saved_hour']), axis=1
+)
+priceedf = priceedf.drop(columns=['Hour', 'saved_hour'])
+priceedf.set_index('Time', inplace=True)
 
 #set hourly and daily load df
 loadhourly = loaddf.copy()
@@ -166,11 +176,8 @@ for idx, row in sunrise_sunset_df.iterrows():
 hourly_data_df = pd.concat(hourly_data_list).reset_index(drop=True)
 # Print the resulting DataFrame
 #print(hourly_data_df)
-
-# Initialize empty DataFrames for old and new loads
-old_loads_df = pd.DataFrame(index=hourly_data_df['date'].unique(), columns=Buildings.keys())
-new_loads_df = pd.DataFrame(index=hourly_data_df['date'].unique(), columns=Buildings.keys())
-
+print('Loop Started')
+loopstart = time.time()
 #Main Project
 Blevel = 0 #represented as a percentage(.1 = 10%)
 SUsed = 0
@@ -182,6 +189,11 @@ originalweatherdf['datetime'] = pd.to_datetime(originalweatherdf['datetime'])
 originalweatherdf.set_index('datetime', inplace=True)
 #fix hourly_data_df
 hourly_data_df['date'] = hourly_data_df.apply(lambda row: row['date'].replace(hour=row['hour']), axis=1)
+
+# Initialize empty DataFrames for old and new loads
+old_loads_df = pd.DataFrame(index=hourly_data_df['date'], columns=Buildings.keys())
+new_loads_df = pd.DataFrame(index=hourly_data_df['date'], columns=Buildings.keys())
+
 # Start main loop
 for index, row in hourly_data_df.iterrows():
   date = row['date']
@@ -189,11 +201,13 @@ for index, row in hourly_data_df.iterrows():
   energyproduced = calcsolarpperiod(hourly_solar, BasePanel, originalweatherdf, date) #take into account solar panel efficiencies
   energyproduced *= BasePanel.ChargeControllerEfficiency
   for address in Buildings:
+      miniloopstart = time.time()
       energy_stored = 0
       building = Buildings[address]
       energy_needed = (get_hourly_usage(date.hour,building.units * building.UsagePproperty))
-      # Update old load DataFrames
-      old_loads_df.at[date, address] = (get_hourly_usage(date.hour,building.units * building.UsagePproperty))
+      # Update old and new load DataFrames
+      old_loads_df.loc[date, address] = (get_hourly_usage(date.hour,building.units * building.UsagePproperty))
+      new_loads_df.loc[date, address] = (get_hourly_usage(date.hour,building.units * building.UsagePproperty))
       energy_obtained = building.TheoSpace * energyproduced
 
       #calc max charge and discharge rate, for one battery
@@ -228,14 +242,14 @@ for index, row in hourly_data_df.iterrows():
                     building.BatteryLevel -= discharge_amount / (building.storagePbattery * building.numberofbatteries)
                     SUsed += discharge_amount
                     # Update new load DataFrames
-                    new_loads_df[date, address] = old_loads_df.loc[date, address] - discharge_amount
+                    new_loads_df.loc[date, address] -= discharge_amount
                     loaddf.at[date, 'N.Y.C.'] -= discharge_amount
                     energy_needed -= discharge_amount
                 else:
                     discharge_amount = min(available_energy, max_discharge_rate)
                     SUsed += discharge_amount
                     # Update new load DataFrames
-                    new_loads_df[date, address] = old_loads_df.loc[date, address] - discharge_amount
+                    new_loads_df.loc[date, address] -= discharge_amount
                     loaddf.at[date, 'N.Y.C.'] -= discharge_amount
                     energy_needed -= discharge_amount
                     building.BatteryLevel -= discharge_amount / (building.storagePbattery * building.numberofbatteries)
@@ -244,13 +258,16 @@ for index, row in hourly_data_df.iterrows():
           GUsed += energy_needed
       else:
           SUsed += energy_needed
-          new_loads_df[date, address] = old_loads_df.loc[date, address] - energy_needed
+          new_loads_df.loc[date, address] -= energy_needed
           loaddf.at[date, 'N.Y.C.'] -= energy_needed
+  miniloopend = time.time()
+  print(f'miniloop time: {miniloopend-miniloopstart}')
+  
   iterations +=1
 
 #check how long loop takes to run
 looptime = time.time()
-looptime -= start_time
+looptime -= loopstart
 print(f'Loop done in : {looptime} seconds!')
 
 #calculate new ISO price data assuming Solar load decreases
@@ -269,8 +286,17 @@ TLoad = loaddf['N.Y.C.'].sum()
 difference_in_loads = old_loads_df - new_loads_df
 avgloadsavperdayperbuild = difference_in_loads.values.mean()
 
-#old_total_price_df = old_loads_df.multiply(price_df['Price'], axis=0)
-
+old_loads_df.index = old_loads_df.index.tz_localize(None)
+new_loads_df.index = new_loads_df.index.tz_localize(None)
+priceedf.index = priceedf.index.tz_localize(None)
+old_total_price_df = old_loads_df.multiply(priceedf['N.Y.C.'], axis=0)
+new_total_price_df = new_loads_df.multiply(priceedf['N.Y.C.'], axis=0)
+old_total_price_df *= .000001
+new_total_price_df *= .000001
+difference_in_prices = old_total_price_df - new_total_price_df
+avgpricesaveperdayperbuild = difference_in_prices.values.mean() 
+print(old_total_price_df)
+print(new_total_price_df)
 
 end_time = time.time()
 duration = end_time - start_time
@@ -286,5 +312,10 @@ whattoprint = [(f'Total Hourly Iterations:{iterations}'),
 (f'Total LBMP price saved for the year ($/Mwh): ${LBMPsavings}'),
 (f'Average price saved per hour: ${LBMPsavings/iterations}'),
 (f'Net Savings after decreased load: ${netsavingscalc(lbmpsavingscalc(NewLBMPprices, True), loaddfcopy, givenload)}'),
+(f'Average load saved per building per day: {avgloadsavperdayperbuild}'),
+(f'Average net savings per building per day with solar: ${avgpricesaveperdayperbuild}'),
 (f"Execution time: {duration} seconds")]
 show_GUI(whattoprint)
+
+
+#price p building, eui change, selling back to grid, if grid was all connected
