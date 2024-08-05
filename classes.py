@@ -102,10 +102,6 @@ def calcbatteryrates(buildingobject, chargeFalseordisTrue = False):
      return buildingobject.MaxCharge * calculate_temp_effect(buildingobject.BatteryRoomTemp) * calculate_humidity_effect(buildingobject.BatteryRoomHumid) * calculate_battery_age_factor(buildingobject.BatteryAge)
   else: 
      return buildingobject.MaxDischarge * calculate_temp_effect(buildingobject.BatteryRoomTemp) * calculate_humidity_effect(buildingobject.BatteryRoomHumid) * calculate_battery_age_factor(buildingobject.BatteryAge)
- 
-    
-  
-
 
 def get_hourly_usage(hour, total_daily_usage,building, IncludeRetrofit = False):
     def usage_pattern(hour):
@@ -222,7 +218,7 @@ def pricingmodelcalc(postsolarload):
   ax.set_xlabel('Actual Prices')
   ax.set_ylabel('Predicted Prices')
   ax.set_title('Actual vs Predicted Prices')
-  plt.show()
+  plt.show(block=False)
   mae = mean_absolute_error(y_test, predictions)
   mse = mean_squared_error(y_test, predictions)
   rmse = mse ** .5
