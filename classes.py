@@ -21,7 +21,11 @@ class SolarPanel:
     self.TempCoefficient = TempCoefficient
 
 class Building:
-  def __init__(self, units, TheoSpace, TotalSquareFeet, UsagePproperty, numberofbatteries, storagePbattery, MaxCharge, MaxDischarge, BatteryRoomTemp, BatteryRoomHumid, BatteryAge, InvertEfficiency, BatteryLevel=0): #add charging factors
+  def __init__(self, units, TheoSpace, TotalSquareFeet, UsagePproperty,
+              numberofbatteries, storagePbattery, MaxCharge, MaxDischarge,
+              BatteryRoomTemp, BatteryRoomHumid, BatteryAge, InvertEfficiency,
+              RetrofitPercentChange, AppliancePercentChange,
+              MaterialPercentChange, BatteryLevel=0): #add charging factors
     self.units = units
     self.TheoSpace = TheoSpace
     self.TotalSquareFeet = TotalSquareFeet
@@ -34,6 +38,9 @@ class Building:
     self.BatteryRoomHumid = BatteryRoomHumid
     self.BatteryAge = BatteryAge
     self.InvertEfficiency = InvertEfficiency
+    self.RetrofitPercentChange = RetrofitPercentChange
+    self.AppliancePercentChange = AppliancePercentChange
+    self.MaterialPercentChange = MaterialPercentChange
     self.BatteryLevel = BatteryLevel
 
   def __str__(self):
@@ -100,7 +107,7 @@ def calcbatteryrates(buildingobject, chargeFalseordisTrue = False):
   
 
 
-def get_hourly_usage(hour, total_daily_usage):
+def get_hourly_usage(hour, total_daily_usage,building, IncludeRetrofit = False):
     def usage_pattern(hour):
       if 6 <= hour < 9:
         return 0.2 * (hour - 6) / 3
@@ -129,27 +136,38 @@ def get_hourly_usage(hour, total_daily_usage):
     
     # Calculate the hourly usage
     hourly_usage = usage_proportion * total_daily_usage
-    return hourly_usage
+
+    if IncludeRetrofit == False:
+       return hourly_usage
+    
+    #Account for Usage Savings
+    else:
+      hourly_usage *= (1-building.RetrofitPercentChange)
+      hourly_usage *= (1-building.AppliancePercentChange)
+      hourly_usage *= (1-building.MaterialPercentChange)
+      return hourly_usage
 
 def pricingmodelcalc(postsolarload):
   #configure ISO DATA
+  llloaddf = NYISOData(dataset='load_h', year='2024').df
   lloaddf = NYISOData(dataset='load_h', year='2023').df # year argument in local time, but returns dataset in UTC
   otherlloaddf =  NYISOData(dataset='load_h', year='2022').df # year argument in local time, but returns dataset in UTC
   otherlloaddff =  NYISOData(dataset='load_h', year='2021').df
   otherlloaddfff =  NYISOData(dataset='load_h', year='2020').df
   otherlloaddffff =  NYISOData(dataset='load_h', year='2019').df
-  lloaddf = pd.concat([lloaddf, otherlloaddf, otherlloaddff, otherlloaddfff, otherlloaddffff], ignore_index=False)
+  lloaddf = pd.concat([llloaddf, lloaddf], ignore_index=False)
   lloaddf = lloaddf.loc[:, ['N.Y.C.']]
   lloaddf = lloaddf.reset_index()
   lloaddf.columns = ['Time', 'N.Y.C.']
   
   lloaddf['Time'] = pd.to_datetime(lloaddf['Time'])
+  priced = NYISOData(dataset='lbmp_dam_h', year='2024').df
   pricedf = NYISOData(dataset='lbmp_dam_h', year='2023').df
   pricedff = NYISOData(dataset='lbmp_dam_h', year='2022').df
   pricedfff= NYISOData(dataset='lbmp_dam_h', year='2021').df
   pricedffff = NYISOData(dataset='lbmp_dam_h', year='2020').df
   pricedfffff = NYISOData(dataset='lbmp_dam_h', year='2019').df
-  pricedf = pd.concat([pricedf, pricedff, pricedfff, pricedffff, pricedfffff], ignore_index=False)
+  pricedf = pd.concat([priced, pricedf], ignore_index=False)
   pricedf = pricedf.loc[:, [('LBMP ($/MWHr)', 'N.Y.C.')]]
   pricedf = pricedf.reset_index()
   pricedf.columns = ['Time', 'N.Y.C.']
@@ -176,7 +194,7 @@ def pricingmodelcalc(postsolarload):
   features = ['N.Y.C._x', 'day_of_week', 'month', 'hour']
   X = data[features]
   y = data['N.Y.C._y']
-  X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=.3, random_state=32)
+  X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=.8, random_state=32)
 
   # Model tuning with GridSearchCV
   #param_grid = {
@@ -249,6 +267,16 @@ def netsavingscalc(mergedpricedf, postsolarload, givenloaddf, dfIFNOTvalue = Fal
   if dfIFNOTvalue == True:
     return mergedpricedf['giventotalpricephour'] - mergedpricedf['newtotalpricephour'] 
   return mergedpricedf['giventotalpricephour'].sum() - mergedpricedf['newtotalpricephour'].sum()
+
+def AnnualEUIsavCalc(old_load, BuildingsDictionary):
+  new_lis = []
+  for address in BuildingsDictionary:
+     avgloadphour = old_load[address].mean()
+     EUIsavforbuild = (avgloadphour*24*365*.001)/BuildingsDictionary[address].TotalSquareFeet
+     new_lis.append(EUIsavforbuild)
+  avgEUIsav = sum(new_lis)/len(new_lis)
+  return avgEUIsav
+  
 
 def show_GUI(whattoprint):
     # Create the GUI window

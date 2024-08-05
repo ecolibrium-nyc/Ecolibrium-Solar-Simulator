@@ -1,0 +1,2 @@
+Address,Number of Units,Theoretical Space for Panels (m^2),Average usage per unit per day (w),Number of Batteries in Building,Storage Size Per Battery (Watts),Base Max Charge Rate (wh),Base Max Discharge Rate (wh),Average Battery Room Temperature (F),Average Battery Room Humidity (percentage),Battery Age (y),Inverter Efficiency (percentage),Total Square Feet,Building Retrofit Savings (percent change),Appliance Retrofit Savings (percent change),Material Retrofit Savings (percent change)
+292E3RDST,9,220,2836,18,5000,5000,10000,75,0.5,0,0.995,6920,0,0,0
