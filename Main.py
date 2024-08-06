@@ -99,6 +99,10 @@ class SolarApp:
         self.result_text = tk.Text(root, height=20, width=100)
         self.result_text.grid(row=10, column=0, columnspan=3)
 
+        # Loading animation variables
+        self.loading = False
+        self.loading_animation_thread = None
+
     def browse_weather_path(self):
         filepath = filedialog.askopenfilename()
         if filepath:
@@ -126,11 +130,25 @@ class SolarApp:
             messagebox.showerror("Input Error", "Please provide both CSV paths.")
             return
 
+        # Start the loading animation
+        self.loading = True
+        self.loading_animation_thread = threading.Thread(target=self.loading_animation)
+        self.loading_animation_thread.start()
+
         # Start a new thread to run the simulation
         threading.Thread(target=self.simulation_thread, args=(weatherpath, buildingpath,
         RatedPowerTotal, RatedPPC, Efficiency, Tolerance, 
         ChargeControllerEfficiency, refrencetemp, TempCoefficient)).start()
     
+    def loading_animation(self):
+        while self.loading:
+            for i in range(4):
+                if not self.loading:
+                    break
+                self.result_text.delete('1.0', tk.END)
+                self.result_text.insert(tk.END, 'Loading' + '.' * i)
+                time.sleep(0.5)
+
     def simulation_thread(self, weatherpath, buildingpath, RatedPowerTotal, 
         RatedPPC, Efficiency, Tolerance, ChargeControllerEfficiency, 
         refrencetemp, TempCoefficient):
@@ -457,6 +475,10 @@ class SolarApp:
         duration = end_time - start_time
 
         # Display results in the text widget
+        self.result_text.delete('1.0', tk.END)  # Clear the loading text
+    
+        # Stop the loading animation
+        self.loading = False
         self.update_results(whattoprint)
     
     #update_results is called from the background thread and schedules the GUI update to run on the main thread.

@@ -218,7 +218,7 @@ def pricingmodelcalc(postsolarload):
   ax.set_xlabel('Actual Prices')
   ax.set_ylabel('Predicted Prices')
   ax.set_title('Actual vs Predicted Prices')
-  plt.show(block=False)
+  #plt.show(block=False)
   mae = mean_absolute_error(y_test, predictions)
   mse = mean_squared_error(y_test, predictions)
   rmse = mse ** .5
